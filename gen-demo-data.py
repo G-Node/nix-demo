@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import matplotlib.mlab as mlab
 import numpy as np
 import nix
+import argparse
 
 
 def create_sample_1d(block):
@@ -71,8 +72,34 @@ def create_set_sample_2d(block):
     array.label = 'spike rate'
     return array
 
+
+def create_leibig_data(block, path):
+    import csv
+    fd = open(path, 'rb')
+    lreader = csv.reader(fd, delimiter=',')
+    ldata = np.array([[float(x) for x in r] for r in lreader])
+    array = block.create_data_array("MEA LFP", "nix.data.sampled.lfp", nix.DataType.Double, ldata.shape)
+    array.data[:] = ldata
+    d1 = array.create_sampled_dimension(1, 7.4)
+    d1.unit = 'um'
+    d1.label = 'x'
+    d1.offset = 0
+    d2 = array.create_sampled_dimension(2, 14.8)
+    d2.unit = 'um'
+    d2.label = 'y'
+    d2.offset = 0
+    array.unit = 'mV'
+    array.label = 'Volt'
+    return array
+
 if __name__ == '__main__':
-    nf = nix.File.open("demo.h5", nix.FileMode.Overwrite)
+
+    parser = argparse.ArgumentParser(description='NIX Plotter')
+    parser.add_argument('--file', dest='file', type=str, default='demo.h5')
+    parser.add_argument('--leibig', dest='leibig', type=str, default=None)
+    args = parser.parse_args()
+
+    nf = nix.File.open(args.file, nix.FileMode.Overwrite)
     session = nf.create_block("test block", "recordingsession")
     da = create_sample_1d(session)
     print('1-D, SampleDD: %s' % da.id)
@@ -82,3 +109,7 @@ if __name__ == '__main__':
     print('2-D, SampleD: %s' % da.id)
     da = create_set_sample_2d(session)
     print('2-D, SetD+SampleD: %s' % da.id)
+
+    if args.leibig is not None:
+        da = create_leibig_data(session, args.leibig)
+        print('Leibig 2-D, SampleD+SampleD: %s' % da.id)
