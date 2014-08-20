@@ -33,6 +33,8 @@ class Plotter(object):
             self._post_plot_hook = plot_post_hook
         except ImportError:
             pass
+        except AttributeError:
+            pass
 
     @property
     def figure(self):
@@ -50,7 +52,6 @@ class Plotter(object):
 
         if self._post_plot_hook is not None:
             self._post_plot_hook()
-
 
     def _plot_array_1d(self, array, shape):
         dim = array.dimensions[0]
