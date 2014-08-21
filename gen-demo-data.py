@@ -78,7 +78,7 @@ def create_leibig_data(block, path):
     fd = open(path, 'rb')
     lreader = csv.reader(fd, delimiter=',')
     ldata = np.array([[float(x) for x in r] for r in lreader])
-    array = block.create_data_array("MEA LFP", "nix.data.sampled.lfp", nix.DataType.Double, ldata.shape)
+    array = block.create_data_array("MEA", "nix.data.sampled.sensordata", nix.DataType.Double, ldata.shape)
     array.data[:] = ldata
     d1 = array.create_sampled_dimension(1, 7.4)
     d1.unit = 'um'
@@ -89,7 +89,7 @@ def create_leibig_data(block, path):
     d2.label = 'y'
     d2.offset = 0
     array.unit = 'mV'
-    array.label = 'Volt'
+    array.label = 'voltage'
     return array
 
 if __name__ == '__main__':
