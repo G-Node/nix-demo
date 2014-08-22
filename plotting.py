@@ -18,6 +18,7 @@ class Plotter(object):
         self.fig = plt.figure(facecolor='white')
         plt.hold('on')
         self._n_plots = 0
+        self._x_range = None
 
     def _setup_ggplot(self):
         try:
@@ -39,6 +40,14 @@ class Plotter(object):
     def figure(self):
         return self.fig
 
+    @property
+    def xrange(self):
+        return self._x_range
+
+    @xrange.setter
+    def xrange(self, value):
+        self._x_range = value
+
     def add_plot(self, array):
         shape = array.data.shape
         nd = len(shape)
@@ -56,7 +65,7 @@ class Plotter(object):
         dim = array.dimensions[0]
 
         if dim.dimension_type == nix.DimensionType.Set:
-            x = array.data[:]
+            x = array.data[self.xrange or Ellipsis]
             y = np.ones_like(x)
             #TODO: the color logic below is stupid
             plt.scatter(x, y, 10, 'k' if self._n_plots == 0 else 'r', linewidths=0)
