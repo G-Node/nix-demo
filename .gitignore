@@ -52,3 +52,10 @@ docs/_build/
 
 # PyBuilder
 target/
+
+# IDEA / PyCharm files
+.idea
+*.iml
+
+# Temporary files
+*~
