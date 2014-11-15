@@ -10,14 +10,16 @@ import matplotlib.pyplot as plt
 from IPython import embed
 
 class Plotter(object):
-    def __init__(self, try_ggplot_style=True):
+    def __init__(self, figure=None, try_ggplot_style=True):
         self._post_plot_hook = None
-
+        
         if try_ggplot_style:
             self._setup_ggplot()
-
-        self.fig = plt.figure(facecolor='white')
-        plt.hold('on')
+        if figure is None:
+            self.fig = plt.figure(facecolor='white')
+            plt.hold('on')
+        else:
+            self.fig = figure
         self._n_plots = 0
         self._x_range = None
         self.axis = None
