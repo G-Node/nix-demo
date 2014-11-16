@@ -7,7 +7,6 @@ import numpy as np
 import scipy.signal as sp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from IPython import embed
 
 class Plotter(object):
     def __init__(self, figure=None, try_ggplot_style=True):
@@ -57,13 +56,12 @@ class Plotter(object):
         nd = len(shape)
         if axis is None and self.axis is None:
             self.axis = self.fig.add_subplot(111)
-            print (type(self.axis))
             self.axis.tick_params(direction='out')
             self.axis.spines['top'].set_color('none')
             self.axis.spines['right'].set_color('none')
             self.axis.xaxis.set_ticks_position('bottom')
             self.axis.yaxis.set_ticks_position('left')
-        else:
+        elif axis is not None:
             self.axis = axis
         
         if nd == 1:
@@ -82,12 +80,12 @@ class Plotter(object):
         
         if dim.dimension_type == nix.DimensionType.Set:
             x = array[self.xrange or Ellipsis]
-            y = np.ones_like(x)
+            z = np.ones_like(x) * 0.5 * self.axis.get_ylim()[1]
             #TODO: the color logic below is stupid
-            self.axis.scatter(x, y, 10, 'dodgerblue' if self._n_plots == 0 else 'red', linewidths=0)
+            self.axis.scatter(x, z, 10, 'dodgerblue' if self._n_plots == 0 else 'red',
+                              linewidths=0, label='%s [%s]' % (array.name, array.type))
             self.axis.set_xlabel('%s [%s]' % (array.label, array.unit))
             self.axis.set_ylabel(array.name)
-            self.axis.set_title('%s [%s]' % (array.name, array.type))
             self.axis.set_yticks([])
 
         elif dim.dimension_type == nix.DimensionType.Sample:
@@ -100,13 +98,13 @@ class Plotter(object):
             if xlim is not None:
                 x = x[np.all((x>=xlim[0],x<=xlim[1]),axis=0)]
                 y = y[np.all((x>=xlim[0],x<=xlim[1]),axis=0)]
-            self.axis.plot(x, y, 'dodgerblue')
+            self.axis.plot(x, y, 'dodgerblue', label='%s [%s]' % (array.name, array.type))
             self.axis.set_xlabel('%s [%s]' % (dim.label, dim.unit))
             self.axis.set_ylabel('%s [%s]' % (array.label, array.unit))
-            self.axis.set_title('%s [%s]' % (array.name, array.type))
             self.axis.set_xlim([np.min(x), np.max(x)])
         else:
             raise Exception('Unsupported data')
+        self.axis.legend()
 
     def _plot_array_2d(self, array, shape, xlim=None, down_sample=None):
         d1 = array.dimensions[0]
@@ -134,16 +132,16 @@ class Plotter(object):
             x_one = x_start + np.arange(0, shape[1]) * d2.sampling_interval
             x = np.tile(x_one.reshape(shape[1], 1), shape[0])
             y = array[:]
-            self.axis.plot(x, y.T)
+            self.axis.plot(x, y.T, color='dodgerblue')
             self.axis.set_title('%s [%s]' % (array.name, array.type))
             self.axis.set_xlabel('%s [%s]' % (d2.label, d2.unit))
             self.axis.set_ylabel('%s [%s]' % (array.label, array.unit))
 
             if d1.labels is not None:
                 self.axis.legend(d1.labels)
-
         else:
             raise Exception('Unsupported data')
+        self.axis.legend()
 
     def save(self, filename, width=None, height=None, units='cm', **kwargs):
         # units conversion taken from ggsave
