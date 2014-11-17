@@ -10,7 +10,6 @@ SAMPLING_UNIT = "ms"
 
 index_to_time = lambda index: SAMPLING_INTERVAL * index
 index_to_time_vec = np.vectorize(index_to_time)
-index_to_duration = lambda start, end: index_to_time(end) - index_to_time(start)
 
 
 class Sweep(object):
