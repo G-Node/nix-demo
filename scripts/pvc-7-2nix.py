@@ -7,12 +7,31 @@ python pvc-7-2nix.py -p "/home/andrey/data/CRCNS/pvc-7" -s 50000 -e 51000
 """
 
 import h5py
-import nix
 import numpy
 import argparse
 import os
 import sys
+from PIL import Image
+
+import nix
 import cv2
+
+
+def process_image(image, resize):
+    """
+    Resizes image by a given scale <resize>.
+
+    :param image:   image as numpy array
+    :param resize:  scale to resize
+    :return:
+    """
+    if resize is None:
+        return image
+
+    img = Image.fromarray(image)
+    rsize = img.resize((img.size[0]/resize, img.size[1]/resize))
+
+    return numpy.asarray(rsize)
 
 
 def create_array(target_file, where, array_params, ticks):
@@ -39,108 +58,112 @@ def create_array(target_file, where, array_params, ticks):
     target.close()
 
 
-def read_imaging(source_file, start_index, end_index):
-    """
-    Read a slice [start_index, end_index] from source imaging file.
+class Parser(object):
 
-    :param source_file: full path to the source data file
-    :param start_index: index of the first image
-    :param end_index:   index of the last image
-    :return:
-    """
-    source = h5py.File(source_file, 'r')
-    data = source['data'][start_index:end_index]
-    ticks = numpy.linspace(start_index, end_index - 1, end_index - start_index)
+    @staticmethod
+    def read_imaging(source_file, start_index, end_index, resize=None):
+        """
+        Read a slice [start_index, end_index] from source imaging file.
 
-    source.close()
+        :param source_file: full path to the source data file
+        :param start_index: index of the first image
+        :param end_index:   index of the last image
+        :return:
+        """
+        source = h5py.File(source_file, 'r')
+        data = source['data'][start_index:end_index]
+        data = [process_image(x, resize) for x in data]
+        ticks = numpy.linspace(start_index, end_index - 1, end_index - start_index)
 
-    return data, ticks
+        source.close()
 
+        return numpy.array(data), ticks
 
-def read_movie(videofile, framesfile, start_index, end_index):
-    """
-    Read a slice [start_index, end_index] of video recording.
+    @staticmethod
+    def read_movie(videofile, framesfile, start_index, end_index, resize=None):
+        """
+        Read a slice [start_index, end_index] of video recording.
 
-    :param videofile:   path to the video file
-    :param framesfile:  path to the mapping file
-    :param start_index: index of the first image
-    :param end_index:   index of the last image
-    :return:
-    """
-    cap = cv2.VideoCapture(videofile)
-    frames = open(framesfile, 'r')
+        :param videofile:   path to the video file
+        :param framesfile:  path to the mapping file
+        :param start_index: index of the first image
+        :param end_index:   index of the last image
+        :return:
+        """
+        cap = cv2.VideoCapture(videofile)
+        frames = open(framesfile, 'r')
 
-    print('reading video %s' % videofile)
+        print('reading video %s' % videofile)
 
-    to_slice, ticks = [], []
-    for line in frames.readlines():
-        frame_no = int(line.split('.')[0])
-        success, image = cap.read()
+        to_slice, ticks = [], []
+        for line in frames.readlines():
+            frame_no = int(line.split('.')[0])
+            success, image = cap.read()
 
-        print "\rprocessing frame %s.." % str(frame_no),
+            print "\rprocessing frame %s.." % str(frame_no),
 
-        if not success:
-            break
+            if not success:
+                break
 
-        if start_index <= frame_no < end_index:
-            to_slice.append(image)
-            ticks.append(frame_no)
+            if start_index <= frame_no < end_index:
+                to_slice.append(process_image(image, resize))
+                ticks.append(frame_no)
 
-        if frame_no > end_index:
-            break
+            if frame_no > end_index:
+                break
 
-    print "done"
+        print "done"
 
-    return numpy.array(to_slice), numpy.array(ticks, dtype=int)
+        return numpy.array(to_slice), numpy.array(ticks, dtype=int)
 
+    @staticmethod
+    def read_speed(source_file, start_index, end_index):
+        """
+        Read a slice [start_index, end_index] from file with mouse speeds.
 
-def read_speed(source_file, start_index, end_index):
-    """
-    Read a slice [start_index, end_index] from file with mouse speeds.
+        :param source_file: full path to the source data file
+        :param start_index: index of the first image
+        :param end_index:   index of the last image
+        :return:
+        """
+        speeds = open(source_file, 'r')
 
-    :param source_file: full path to the source data file
-    :param start_index: index of the first image
-    :param end_index:   index of the last image
-    :return:
-    """
-    speeds = open(source_file, 'r')
+        to_slice, ticks = [], []
+        for i, line in enumerate(speeds.readlines()):
+            if start_index <= i < end_index:
+                to_slice.append(float(line))
+                ticks.append(i)
 
-    to_slice, ticks = [], []
-    for i, line in enumerate(speeds.readlines()):
-        if start_index <= i < end_index:
-            to_slice.append(float(line))
-            ticks.append(i)
+        speeds.close()
 
-    speeds.close()
+        return numpy.array(to_slice), numpy.array(ticks, dtype=int)
 
-    return numpy.array(to_slice), numpy.array(ticks, dtype=int)
+    @staticmethod
+    def read_stimulus(source_file, start_index, end_index):
+        """
+        Read a slice [start_index, end_index] from stimulus file.
 
+        :param source_file: full path to the source data file
+        :param start_index: index of the first image
+        :param end_index:   index of the last image
+        :return:
+        """
+        stimfile = open(source_file, 'r')
 
-def read_stimulus(source_file, start_index, end_index):
-    """
-    Read a slice [start_index, end_index] from stimulus file.
+        collector = []
+        stimfile.readline()  # skip first line
+        for i, line in enumerate(stimfile.readlines()):
+            parse = lambda j, x: float(x) if j == 3 or j == 5 else int(x)
+            collector.append([parse(j, x) for j, x in enumerate(line.split(','))])
 
-    :param source_file: full path to the source data file
-    :param start_index: index of the first image
-    :param end_index:   index of the last image
-    :return:
-    """
-    stimfile = open(source_file, 'r')
+        stimfile.close()
 
-    collector = []
-    stimfile.readline()  # skip first line
-    for i, line in enumerate(stimfile.readlines()):
-        parse = lambda j, x: float(x) if j == 3 or j == 5 else int(x)
-        collector.append([parse(j, x) for j, x in enumerate(line.split(','))])
+        collected = numpy.array(collector)
+        collected = collected[collected[:,0].argsort()]  # sorting by positions
+        si = numpy.where(collected[:,0] >= start_index)[0][0]
+        ei = numpy.where(collected[:,0] < end_index)[0][-1]
 
-    stimfile.close()
-
-    collected = numpy.array(collector)
-    collected = collected[collected[:,0].argsort()]  # sorting by positions
-    si = numpy.where(collected[:,0] >= start_index)[0][0]
-    ei = numpy.where(collected[:,0] < end_index)[0][-1]
-
-    return collected[si:ei]  # slicing by region of interest
+        return collected[si:ei]  # slicing by region of interest
 
 
 if __name__ == '__main__':
@@ -155,10 +178,14 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--end", dest="end", default=sys.maxint, type=int,
                         help="The number of the sweep where reading should stop"
                              " (excludes this sweep)")
+    parser.add_argument("-c", "--compression", dest="comp", default=10,
+                        type=int, help="Video compression (10 will result in "
+                                       "100 times)")
     args = parser.parse_args()
 
     start = args.start
     end = args.end
+    resize = args.comp
     bname = 'pvc-7'
     l_path = os.path.join(args.path, '122008_140124_windowmix')
 
@@ -171,14 +198,14 @@ if __name__ == '__main__':
 
     # convert 2-photon imaging
     source_file = os.path.join(l_path, 'concat_31Hz.h5')
-    data, ticks = read_imaging(source_file, start, end)
+    data, ticks = Parser.read_imaging(source_file, start, end, resize)
     params = ('concat', 'imaging', data.dtype, data.shape, data)
     create_array(args.output, bname, params, ticks)
 
     # convert eye movie
     videofile = os.path.join(l_path, 'eye.avi')
     framesfile = os.path.join(l_path, 'eye_times.txt')
-    data, ticks = read_movie(videofile, framesfile, start, end)
+    data, ticks = Parser.read_movie(videofile, framesfile, start, end, resize)
     arr_name = os.path.basename(videofile)
     params = (arr_name, 'movie', data.dtype, data.shape, data)
     create_array(args.output, bname, params, ticks)
@@ -186,20 +213,20 @@ if __name__ == '__main__':
     # convert mouse movie
     videofile = os.path.join(l_path, 'mouse.avi')
     framesfile = os.path.join(l_path, 'mouse_times.txt')
-    data, ticks = read_movie(videofile, framesfile, start, end)
+    data, ticks = Parser.read_movie(videofile, framesfile, start, end, resize)
     arr_name = os.path.basename(videofile)
     params = (arr_name, 'movie', data.dtype, data.shape, data)
     create_array(args.output, bname, params, ticks)
 
     # convert running speeds
     source_file = os.path.join(l_path, 'runspeed.txt')
-    data, ticks = read_speed(source_file, start, end)
+    data, ticks = Parser.read_speed(source_file, start, end)
     params = ('runspeed', 'array', data.dtype, data.shape, data)
     create_array(args.output, bname, params, ticks)
 
     # convert stimulus and tag data
     source_file = os.path.join(l_path, 'stimulus.csv')
-    collected = read_stimulus(source_file, start, end)
+    collected = Parser.read_stimulus(source_file, start, end)
 
     target = nix.File.open(args.output, nix.FileMode.ReadWrite)
     block = target.blocks[bname]
