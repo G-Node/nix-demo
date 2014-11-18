@@ -15,46 +15,56 @@ import sys
 import cv2
 
 
-def convert_imaging(source_file, target_file, start_index, end_index, name):
+def create_array(target_file, where, array_params, ticks):
     """
-    Get a slice [start_index, end_index] from source file and store it
-    to target NIX file.
+    A helper function.
+    Creates a NIX array in a given <target_file> inside a given <where> block
+    using provided <params>. Appends <ticks> as a first dimension.
+
+    :param target_file:     full path to the target NIX file
+    :param where:           nix::Block name
+    :param array_params:    list of parameters to create an array
+    :param ticks:           ticks for the first dimension
+    :return:
+    """
+    target = nix.File.open(target_file, nix.FileMode.ReadWrite)
+    block = target.blocks[where]
+
+    data = block.create_data_array(*array_params)
+
+    data.append_range_dimension(ticks)
+    for i in range(len(data.data.shape) - 1):
+        data.append_set_dimension()
+
+    target.close()
+
+
+def read_imaging(source_file, start_index, end_index):
+    """
+    Read a slice [start_index, end_index] from source imaging file.
 
     :param source_file: full path to the source data file
-    :param target_file: full path to the existing target NIX file
     :param start_index: index of the first image
     :param end_index:   index of the last image
-    :param name:        name of the NIX block where to put the slice
     :return:
     """
     source = h5py.File(source_file, 'r')
-    sliced = source['data'][start_index:end_index]
+    data = source['data'][start_index:end_index]
     ticks = numpy.linspace(start_index, end_index - 1, end_index - start_index)
 
-    target = nix.File.open(target_file, nix.FileMode.ReadWrite)
-    block = target.blocks[name]
+    source.close()
 
-    params = ('concat', 'imaging', sliced.dtype, sliced.shape, sliced)
-    data = block.create_data_array(*params)
-
-    data.append_range_dimension(ticks)
-    data.append_set_dimension()
-    data.append_set_dimension()
-
-    map(lambda x: x.close(), [source, target])
+    return data, ticks
 
 
-def convert_movie(videofile, framesfile, target_file, start_index, end_index, name):
+def read_movie(videofile, framesfile, start_index, end_index):
     """
-    Convert a slice [start_index, end_index] of video recording into target
-    NIX file. TODO - find a way to seek directly the slice
+    Read a slice [start_index, end_index] of video recording.
 
     :param videofile:   path to the video file
     :param framesfile:  path to the mapping file
-    :param target_file: path to the existing target NIX file
     :param start_index: index of the first image
     :param end_index:   index of the last image
-    :param name:        name of the NIX block where to put the slice
     :return:
     """
     cap = cv2.VideoCapture(videofile)
@@ -79,38 +89,18 @@ def convert_movie(videofile, framesfile, target_file, start_index, end_index, na
         if frame_no > end_index:
             break
 
-    target = nix.File.open(target_file, nix.FileMode.ReadWrite)
-    block = target.blocks[name]
-
-    print "\rconverting to NIX..",
-
-    sliced = numpy.array(to_slice)
-    arr_name = os.path.basename(videofile)
-    params = (arr_name, 'movie', sliced.dtype, sliced.shape, sliced)
-    data = block.create_data_array(*params)
-
-    data.append_range_dimension(ticks)
-    data.append_set_dimension()
-    data.append_set_dimension()
-    data.append_set_dimension()
-
-    map(lambda x: x.close(), [frames, target])
-    cap.release()
-    cv2.destroyAllWindows()
-
     print "done"
 
+    return numpy.array(to_slice), numpy.array(ticks, dtype=int)
 
-def convert_speed(source_file, target_file, start_index, end_index, name):
+
+def read_speed(source_file, start_index, end_index):
     """
-    Get a slice [start_index, end_index] from source file and store it
-    to target NIX file.
+    Read a slice [start_index, end_index] from file with mouse speeds.
 
     :param source_file: full path to the source data file
-    :param target_file: full path to the existing target NIX file
     :param start_index: index of the first image
     :param end_index:   index of the last image
-    :param name:        name of the NIX block where to put the slice
     :return:
     """
     speeds = open(source_file, 'r')
@@ -121,17 +111,36 @@ def convert_speed(source_file, target_file, start_index, end_index, name):
             to_slice.append(float(line))
             ticks.append(i)
 
-    target = nix.File.open(target_file, nix.FileMode.ReadWrite)
-    block = target.blocks[name]
+    speeds.close()
 
-    sliced = numpy.array(to_slice)
-    ticks = numpy.array(ticks, dtype=int)
-    params = ('runspeed', 'array', sliced.dtype, sliced.shape, sliced)
-    data = block.create_data_array(*params)
+    return numpy.array(to_slice), numpy.array(ticks, dtype=int)
 
-    data.append_range_dimension(ticks)
 
-    map(lambda x: x.close(), [speeds, target])
+def read_stimulus(source_file, start_index, end_index):
+    """
+    Read a slice [start_index, end_index] from stimulus file.
+
+    :param source_file: full path to the source data file
+    :param start_index: index of the first image
+    :param end_index:   index of the last image
+    :return:
+    """
+    stimfile = open(source_file, 'r')
+
+    collector = []
+    stimfile.readline()  # skip first line
+    for i, line in enumerate(stimfile.readlines()):
+        parse = lambda j, x: float(x) if j == 3 or j == 5 else int(x)
+        collector.append([parse(j, x) for j, x in enumerate(line.split(','))])
+
+    stimfile.close()
+
+    collected = numpy.array(collector)
+    collected = collected[collected[:,0].argsort()]  # sorting by positions
+    si = numpy.where(collected[:,0] >= start_index)[0][0]
+    ei = numpy.where(collected[:,0] < end_index)[0][-1]
+
+    return collected[si:ei]  # slicing by region of interest
 
 
 if __name__ == '__main__':
@@ -162,43 +171,36 @@ if __name__ == '__main__':
 
     # convert 2-photon imaging
     source_file = os.path.join(l_path, 'concat_31Hz.h5')
-    convert_imaging(source_file, args.output, start, end, bname)
+    data, ticks = read_imaging(source_file, start, end)
+    params = ('concat', 'imaging', data.dtype, data.shape, data)
+    create_array(args.output, bname, params, ticks)
 
-    """
     # convert eye movie
     videofile = os.path.join(l_path, 'eye.avi')
     framesfile = os.path.join(l_path, 'eye_times.txt')
-    convert_movie(videofile, framesfile, args.output, start, end, bname)
+    data, ticks = read_movie(videofile, framesfile, start, end)
+    arr_name = os.path.basename(videofile)
+    params = (arr_name, 'movie', data.dtype, data.shape, data)
+    create_array(args.output, bname, params, ticks)
 
     # convert mouse movie
     videofile = os.path.join(l_path, 'mouse.avi')
     framesfile = os.path.join(l_path, 'mouse_times.txt')
-    convert_movie(videofile, framesfile, args.output, start, end, bname)
+    data, ticks = read_movie(videofile, framesfile, start, end)
+    arr_name = os.path.basename(videofile)
+    params = (arr_name, 'movie', data.dtype, data.shape, data)
+    create_array(args.output, bname, params, ticks)
 
     # convert running speeds
     source_file = os.path.join(l_path, 'runspeed.txt')
-    convert_speed(source_file, args.output, start, end, bname)
-    """
-
-    # read stimulus
-    source_file = os.path.join(l_path, 'stimulus.csv')
-    stimfile = open(source_file, 'r')
-
-    collector = []
-    stimfile.readline()  # skip first line
-    for i, line in enumerate(stimfile.readlines()):
-        parse = lambda j, x: float(x) if j == 3 or j == 5 else int(x)
-        collector.append([parse(j, x) for j, x in enumerate(line.split(','))])
-
-    stimfile.close()
-
-    collected = numpy.array(collector)
-    collected = collected[collected[:,0].argsort()]  # sorting by positions
-    si = numpy.where(collected[:,0] >= start)[0][0]
-    ei = numpy.where(collected[:,0] < end)[0][-1]
-    collected = collected[si:ei]  # slicing by region of interest
+    data, ticks = read_speed(source_file, start, end)
+    params = ('runspeed', 'array', data.dtype, data.shape, data)
+    create_array(args.output, bname, params, ticks)
 
     # convert stimulus and tag data
+    source_file = os.path.join(l_path, 'stimulus.csv')
+    collected = read_stimulus(source_file, start, end)
+
     target = nix.File.open(args.output, nix.FileMode.ReadWrite)
     block = target.blocks[bname]
 
