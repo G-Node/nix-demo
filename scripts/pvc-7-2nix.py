@@ -3,7 +3,7 @@ Installing OpenCV on Ubuntu 14.04
 http://www.samontab.com/web/2014/06/installing-opencv-2-4-9-in-ubuntu-14-04-lts/
 
 Example:
-python pvc-7-2nix.py -p "/home/andrey/data/CRCNS/pvc-7" -s 50000 -e 51000
+python pvc-7-2nix.py -p "/home/andrey/data/CRCNS/pvc-7" -s 5000 -e 6000
 """
 
 import h5py
@@ -193,7 +193,7 @@ if __name__ == '__main__':
     assert(start < end)
 
     f = nix.File.open(args.output, nix.FileMode.Overwrite)
-    f.create_block(bname, 'allendataset')
+    f.create_block(bname, bname)
     f.close()
 
     # convert 2-photon imaging
@@ -206,25 +206,23 @@ if __name__ == '__main__':
     videofile = os.path.join(l_path, 'eye.avi')
     framesfile = os.path.join(l_path, 'eye_times.txt')
     data, ticks = Parser.read_movie(videofile, framesfile, start, end, resize)
-    arr_name = os.path.basename(videofile)
-    params = (arr_name, 'movie', data.dtype, data.shape, data)
+    params = ('eye.avi', 'movie', data.dtype, data.shape, data)
     create_array(args.output, bname, params, ticks)
 
     # convert mouse movie
     videofile = os.path.join(l_path, 'mouse.avi')
     framesfile = os.path.join(l_path, 'mouse_times.txt')
     data, ticks = Parser.read_movie(videofile, framesfile, start, end, resize)
-    arr_name = os.path.basename(videofile)
-    params = (arr_name, 'movie', data.dtype, data.shape, data)
+    params = ('mouse.avi', 'movie', data.dtype, data.shape, data)
     create_array(args.output, bname, params, ticks)
 
     # convert running speeds
     source_file = os.path.join(l_path, 'runspeed.txt')
     data, ticks = Parser.read_speed(source_file, start, end)
-    params = ('runspeed', 'array', data.dtype, data.shape, data)
+    params = ('runspeed', 'runspeed', data.dtype, data.shape, data)
     create_array(args.output, bname, params, ticks)
 
-    # convert stimulus and tag data
+    # convert stimulus
     source_file = os.path.join(l_path, 'stimulus.csv')
     collected = Parser.read_stimulus(source_file, start, end)
 
@@ -232,10 +230,16 @@ if __name__ == '__main__':
     block = target.blocks[bname]
 
     stimulus = collected[:,2:6]
-    params = ('combinations', 'stimulus', stimulus.dtype, stimulus.shape, stimulus)
+    params = ('stimulus', 'stimulus', stimulus.dtype,
+              stimulus.shape, stimulus)
     combinations = block.create_data_array(*params)
+    dim = combinations.append_set_dimension()
+    dim.labels = ('orientation', 'SF', 'TF', 'contrast')
 
-    tag = block.create_tag('stimulus', 'stimulus', collected[:,0])
+    # tag all data
+    tag = block.create_tag('recording', 'recording', collected[:,0])
     tag.extent = collected[:,1]
-    tag.references.append(block.data_arrays['concat'])
     tag.create_feature(combinations, nix.LinkType.Tagged)
+
+    for name in ('concat', 'eye.avi', 'mouse.avi', 'runspeed'):
+        tag.references.append(block.data_arrays[name])
