@@ -1,92 +1,112 @@
-#!/usr/bin/env python
+# !/usr/bin/env python
 #  -*- coding: utf-8 -*-
 from __future__ import print_function, division
 
-import nix
 import numpy as np
 import scipy.signal as sp
-import matplotlib as mpl
+import random
+
+import nix
 import matplotlib.pyplot as plt
 
+COLORS_BLUE_AND_RED = (
+    'dodgerblue', 'red'
+)
+
+COLORS_BLUE_GRADIENT = (
+    "#034980", "#055DA1", "#1B70E0", "#3786ED", "#4A95F7",
+    "#0C3663", "#1B4775", "#205082", "#33608F", "#51779E",
+    "#23B0DB", "#29CDFF", "#57D8FF", "#8FE5FF"
+)
+
+
 class Plotter(object):
-    def __init__(self, figure=None, try_ggplot_style=True):
-        self._post_plot_hook = None
-        
-        if try_ggplot_style:
-            self._setup_ggplot()
-        if figure is None:
-            self.fig = plt.figure(facecolor='white')
-            plt.hold('on')
-        else:
-            self.fig = figure
-        self._n_plots = 0
-        self._x_range = None
-        self.axis = None
+    def __init__(self, width=900, height=1200, dpi=90, lines=1, cols=1, facecolor="white",
+                 defaultcolors=COLORS_BLUE_GRADIENT):
 
-    def _setup_ggplot(self):
-        try:
-            from ggplot import theme_bw
-            t = theme_bw()
-            for k, v in t.get_rcParams().iteritems():
-                mpl.rcParams[k] = v
+        assert 0 < lines < 10, "The number of lines should be between 1 and 9"
+        assert 0 < cols < 10, "The number of columns should be between 1 and 9"
 
-            def plot_post_hook():
-                for ax in self.figure.axes:
-                    t.post_plot_callback(ax)
-            self._post_plot_hook = plot_post_hook
-        except ImportError:
-            pass
-        except AttributeError:
-            pass
+        self.__lines = lines
+        self.__cols = cols
+        self.__defaultcolors = defaultcolors
+
+        # TODO ggplot style
+
+        self.__figure = plt.figure(facecolor=facecolor, figsize=(width / dpi, height / dpi), dpi=90)
+        self.__figure.subplots_adjust(wspace=0.3, hspace=0.3, left=0.1, right=0.9, bottom=0.05, top=0.95)
+
+        # list of tuples each containing an axis object/None and the plot count
+        self.__axis_list = ([None, 0], )
+        for i in range(self.subplot_count - 1):
+            self.__axis_list += ([None, 0], )
 
     @property
     def figure(self):
-        return self.fig
+        return self.__figure
 
     @property
-    def xrange(self):
-        return self._x_range
+    def subplot_count(self):
+        return self.__cols * self.__lines
 
-    @xrange.setter
-    def xrange(self, value):
-        self._x_range = value
+    @property
+    def axis_list(self):
+        return self.__axis_list
 
-    def add_plot(self, array, axis=None, xlim=None, down_sample=None):
+    def save(self, name):
+        self.figure.savefig(name)
+
+    def add_plot(self, array, subplot=0, color=None, xlim=None, down_sample=None, xrange=None):
+        """
+        Add a new data array to the plot.
+
+        :param array:       The data array to plot
+        :param subplot:     The index of the subplot where the array should be added (starting with 0)
+        :param color:       The color of the array to plot (if None the next default colors will be assigned)
+        :param xlim:        Start and end of the x-axis limits.
+        :param down_sample: True if the array should be downsampled
+        :param xrange:      Range for the x-axis (only effective for 1d arrays with set dimension)
+
+        :return: The axis object the array was plotted to
+        """
         shape = array.shape
         nd = len(shape)
-        if axis is None and self.axis is None:
-            self.axis = self.fig.add_subplot(111)
-            self.axis.tick_params(direction='out')
-            self.axis.spines['top'].set_color('none')
-            self.axis.spines['right'].set_color('none')
-            self.axis.xaxis.set_ticks_position('bottom')
-            self.axis.yaxis.set_ticks_position('left')
-        elif axis is not None:
-            self.axis = axis
-        
+
+        color = self.__mk_color(color, subplot)
+
+        if self.axis_list[subplot][0] is None:
+            plot_index = self.__mk_subplot_index(subplot)
+            axis = self.figure.add_subplot(*plot_index)
+            axis.tick_params(direction='out')
+            axis.spines['top'].set_color('none')
+            axis.spines['right'].set_color('none')
+            axis.xaxis.set_ticks_position('bottom')
+            axis.yaxis.set_ticks_position('left')
+            self.axis_list[subplot][0] = axis
+        else:
+            axis = self.axis_list[subplot][0]
+
         if nd == 1:
-            self._plot_array_1d(array, shape, xlim=xlim, down_sample=down_sample)
+            self.__plot_array_1d(array, shape, subplot, color, xlim, down_sample, xrange)
         elif nd == 2:
-            self._plot_array_2d(array, shape, xlim=xlim, down_sample=down_sample)
+            self.__plot_array_2d(array, shape, subplot, color, xlim, down_sample)
 
-        self._n_plots += 1
+        self.axis_list[subplot][1] += 1
 
-        if self._post_plot_hook is not None:
-            self._post_plot_hook()
-        return self.axis
+        return axis
 
-    def _plot_array_1d(self, array, shape, xlim=None, down_sample=None):
+    def __plot_array_1d(self, array, shape, subplot, color, xlim, down_sample, xrange):
         dim = array.dimensions[0]
-        
+
+        axis = self.axis_list[subplot][0]
+
         if dim.dimension_type == nix.DimensionType.Set:
-            x = array[self.xrange or Ellipsis]
-            z = np.ones_like(x) * 0.5 * self.axis.get_ylim()[1]
-            #TODO: the color logic below is stupid
-            self.axis.scatter(x, z, 10, 'dodgerblue' if self._n_plots == 0 else 'red',
-                              linewidths=0, label='%s [%s]' % (array.name, array.type))
-            self.axis.set_xlabel('%s [%s]' % (array.label, array.unit))
-            self.axis.set_ylabel(array.name)
-            self.axis.set_yticks([])
+            x = array[xrange or Ellipsis]  # what is xrange for
+            z = np.ones_like(x) * 0.5 * axis.get_ylim()[1]
+            axis.scatter(x, z, 10, color, linewidths=0, label=array.name)
+            axis.set_xlabel('%s [%s]' % (array.label, array.unit))
+            axis.set_ylabel(array.name)
+            axis.set_yticks([])
 
         elif dim.dimension_type == nix.DimensionType.Sample:
             y = array[:]
@@ -96,23 +116,25 @@ class Plotter(object):
                 x = sp.decimate(x, down_sample)
                 y = sp.decimate(y, down_sample)
             if xlim is not None:
-                x = x[np.all((x>=xlim[0],x<=xlim[1]),axis=0)]
-                y = y[np.all((x>=xlim[0],x<=xlim[1]),axis=0)]
-            self.axis.plot(x, y, 'dodgerblue', label='%s [%s]' % (array.name, array.type))
-            self.axis.set_xlabel('%s [%s]' % (dim.label, dim.unit))
-            self.axis.set_ylabel('%s [%s]' % (array.label, array.unit))
-            self.axis.set_xlim([np.min(x), np.max(x)])
+                x = x[np.all((x >= xlim[0], x <= xlim[1]), axis=0)]
+                y = y[np.all((x >= xlim[0], x <= xlim[1]), axis=0)]
+            axis.plot(x, y, color, label=array.name)
+            axis.set_xlabel('%s [%s]' % (dim.label, dim.unit))
+            axis.set_ylabel('%s [%s]' % (array.label, array.unit))
+            axis.set_xlim([np.min(x), np.max(x)])
         else:
             raise Exception('Unsupported data')
-        self.axis.legend()
+        axis.legend()
 
-    def _plot_array_2d(self, array, shape, xlim=None, down_sample=None):
+    def __plot_array_2d(self, array, shape, subplot, color, xlim=None, down_sample=None):
         d1 = array.dimensions[0]
         d2 = array.dimensions[1]
 
         d1_type = d1.dimension_type
         d2_type = d2.dimension_type
-        
+
+        axis = self.axis_list[subplot]
+
         if d1_type == nix.DimensionType.Sample and d2_type == nix.DimensionType.Sample:
             z = array[:]
             x_start = d1.offset or 0
@@ -120,10 +142,10 @@ class Plotter(object):
             x_end = x_start + shape[0] * d1.sampling_interval
             y_end = y_start + shape[1] * d2.sampling_interval
 
-            self.axis.imshow(z, origin='lower', extent=[x_start, x_end, y_start, y_end])
-            self.axis.set_xlabel('%s [%s]' % (d1.label, d1.unit))
-            self.axis.set_ylabel('%s [%s]' % (d2.label, d2.unit))
-            self.axis.set_title('%s [%s]' % (array.name, array.type))
+            axis.imshow(z, origin='lower', extent=[x_start, x_end, y_start, y_end])
+            axis.set_xlabel('%s [%s]' % (d1.label, d1.unit))
+            axis.set_ylabel('%s [%s]' % (d2.label, d2.unit))
+            axis.set_title(array.name)
             bar = plt.colorbar()
             bar.label('%s [%s]' % (array.label, array.unit))
 
@@ -132,26 +154,28 @@ class Plotter(object):
             x_one = x_start + np.arange(0, shape[1]) * d2.sampling_interval
             x = np.tile(x_one.reshape(shape[1], 1), shape[0])
             y = array[:]
-            self.axis.plot(x, y.T, color='dodgerblue')
-            self.axis.set_title('%s [%s]' % (array.name, array.type))
-            self.axis.set_xlabel('%s [%s]' % (d2.label, d2.unit))
-            self.axis.set_ylabel('%s [%s]' % (array.label, array.unit))
+            axis.plot(x, y.T, color=color)
+            axis.set_title(array.name)
+            axis.set_xlabel('%s [%s]' % (d2.label, d2.unit))
+            axis.set_ylabel('%s [%s]' % (array.label, array.unit))
 
             if d1.labels is not None:
-                self.axis.legend(d1.labels)
+                axis.legend(d1.labels)
         else:
             raise Exception('Unsupported data')
-        self.axis.legend()
+        axis.legend()
 
-    def save(self, filename, width=None, height=None, units='cm', **kwargs):
-        # units conversion taken from ggsave
-        if units not in ["in", "cm", "mm"]:
-            raise Exception("units not 'in', 'cm', or 'mm'")
-        to_inch = {"in": lambda x: x, "cm": lambda x: x / 2.54, "mm": lambda x: x * 2.54 * 10}
+    def __mk_subplot_index(self, subplot):
+        return self.__lines, self.__cols, subplot + 1
 
-        w_old, h_old = self.figure.get_size_inches()
-        w = to_inch[units](width) if width is not None else w_old
-        h = to_inch[units](height) if height is not None else h_old
+    def __mk_color(self, color, subplot):
+        if color is None:
+            color_all = self.__defaultcolors
+            color_count = len(color_all)
+            count = self.axis_list[subplot][1]
+            color = color_all[count if count < color_count else color_count - 1]
 
-        self.figure.set_size_inches(w, h)
-        self.figure.savefig(filename, **kwargs)
+        if color == "random":
+            color = "#%02x%02x%02x" % (random.randint(50, 255), random.randint(50, 255), random.randint(50, 255))
+
+        return color
