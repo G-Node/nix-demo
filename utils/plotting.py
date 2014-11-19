@@ -100,6 +100,7 @@ class Plotter(object):
 
         axis = self.axis_list[subplot][0]
 
+
         if dim.dimension_type == nix.DimensionType.Set:
             x = array[xrange or Ellipsis]  # what is xrange for
             z = np.ones_like(x) * 0.5 * axis.get_ylim()[1]
@@ -108,10 +109,13 @@ class Plotter(object):
             axis.set_ylabel(array.name)
             axis.set_yticks([])
 
-        elif dim.dimension_type == nix.DimensionType.Sample:
+        elif dim.dimension_type in (nix.DimensionType.Sample, nix.DimensionType.Range):
             y = array[:]
-            x_start = dim.offset or 0
-            x = np.arange(0, shape[0]) * dim.sampling_interval + x_start
+            if dim.dimension_type == nix.DimensionType.Sample:
+                x_start = dim.offset or 0
+                x = np.arange(0, shape[0]) * dim.sampling_interval + x_start
+            else:
+                x = np.array(dim.ticks)
             if down_sample is not None:
                 x = sp.decimate(x, down_sample)
                 y = sp.decimate(y, down_sample)
@@ -122,6 +126,7 @@ class Plotter(object):
             axis.set_xlabel('%s [%s]' % (dim.label, dim.unit))
             axis.set_ylabel('%s [%s]' % (array.label, array.unit))
             axis.set_xlim([np.min(x), np.max(x)])
+
         else:
             raise Exception('Unsupported data')
         axis.legend()
