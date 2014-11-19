@@ -151,6 +151,9 @@ class Plotter(object):
     # private methods
 
     def __mk_color(self, color, subplot):
+        """
+        If color is None, select one from the defaults or create a random color.
+        """
         if color is None:
             color_count = len(self.defaultcolors)
             count = len(self.subplot_data[subplot])
@@ -160,6 +163,18 @@ class Plotter(object):
             color = "#%02x%02x%02x" % (random.randint(50, 255), random.randint(50, 255), random.randint(50, 255))
 
         return color
+
+    @staticmethod
+    def __count_signal_like(self, pdata_list):
+        pass
+
+    @staticmethod
+    def __count_image_like(self, pdata_list):
+        pass
+
+    @staticmethod
+    def __count_event_like(self, pdata_list):
+        pass
 
 
 class PlottingData(object):
