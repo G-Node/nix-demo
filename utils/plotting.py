@@ -94,7 +94,7 @@ class Plotter(object):
         :param labels:      Data array with labels that should be added to each data point of the array to plot
         """
         color = self.__mk_color(color, subplot)
-        pdata = PlottingData(array, color, subplot, xlim, downsample)
+        pdata = PlottingData(array, color, subplot, xlim, downsample, labels)
         self.subplot_data[subplot].append(pdata)
 
     def plot(self, width=None, height=None, dpi=None, lines=None, cols=None, facecolor=None):
@@ -121,6 +121,10 @@ class Plotter(object):
 
         for subplot, pdata_list in enumerate(self.subplot_data):
             axis = axis_all[subplot]
+            pdata_list.sort()
+
+            event_like = Plotter.__count_event_like(pdata_list)
+            signal_like = Plotter.__count_signal_like(pdata_list)
 
             for i, pdata in enumerate(pdata_list):
                 d1type = pdata.array.dimensions[0].dimension_type
@@ -129,8 +133,10 @@ class Plotter(object):
 
                 if nd == 1:
                     if d1type == nix.DimensionType.Set:
-                        plot_array_1d_set(pdata.array, axis, color=pdata.color, xlim=pdata.xlim,
-                                          downsample=pdata.downsample)
+                        second_y = signal_like > 0
+                        hint = (i + 1.0) / (event_like + 1.0) if event_like > 0 else None
+                        plot_array_1d_set(pdata.array, axis, color=pdata.color, xlim=pdata.xlim, labels=pdata.labels,
+                                          second_y=second_y, hint=hint)
                     else:
                         plot_array_1d(pdata.array, axis, color=pdata.color, xlim=pdata.xlim,
                                       downsample=pdata.downsample)
@@ -151,6 +157,9 @@ class Plotter(object):
     # private methods
 
     def __mk_color(self, color, subplot):
+        """
+        If color is None, select one from the defaults or create a random color.
+        """
         if color is None:
             color_count = len(self.defaultcolors)
             count = len(self.subplot_data[subplot])
@@ -161,10 +170,53 @@ class Plotter(object):
 
         return color
 
+    @staticmethod
+    def __count_signal_like(pdata_list):
+        sig_types = (nix.DimensionType.Range, nix.DimensionType.Sample)
+        count = 0
+
+        for pdata in pdata_list:
+            dims = pdata.array.dimensions
+            nd = len(dims)
+
+            if nd == 1 and dims[0].dimension_type in sig_types:
+                count += 1
+            elif nd == 2 and dims[0].dimension_type == nix.DimensionType.Set and dims[1].dimension_type in sig_types:
+                count += 1
+
+        return count
+
+    @staticmethod
+    def __count_image_like(pdata_list):
+        sig_types = (nix.DimensionType.Range, nix.DimensionType.Sample)
+        count = 0
+
+        for pdata in pdata_list:
+            dims = pdata.array.dimensions
+            nd = len(dims)
+
+            if nd == 2 and dims[0].dimension_type in sig_types and dims[1].dimension_type in sig_types:
+                count += 1
+
+        return count
+
+    @staticmethod
+    def __count_event_like(pdata_list):
+        count = 0
+
+        for pdata in pdata_list:
+            dims = pdata.array.dimensions
+            nd = len(dims)
+
+            if dims[0].dimension_type == nix.DimensionType.Set:
+                count += 1
+
+        return count
+
 
 class PlottingData(object):
 
-    def __init__(self, array, color, subplot=0, xlim=None, downsample=False):
+    def __init__(self, array, color, subplot=0, xlim=None, downsample=False, labels=None):
         self.array = array
         self.dimensions = array.dimensions
         self.shape = array.shape
@@ -173,10 +225,14 @@ class PlottingData(object):
         self.subplot = subplot
         self.xlim = xlim
         self.downsample = downsample
+        self.labels = labels
 
     def __cmp__(self, other):
         weights = lambda dims: [(1 if d.dimension_type == nix.DimensionType.Sample else 0) for d in dims]
-        cmp(weights(self.array.dimensions), weights(other.array.dimensions))
+        return cmp(weights(self.array.dimensions), weights(other.array.dimensions))
+
+    def __lt__(self, other):
+        return self.__cmp__(other) < 0
 
 
 def plot_make_figure(width, height, dpi, cols, lines, facecolor):
@@ -223,22 +279,34 @@ def plot_array_1d(array, axis, color=None, xlim=None, downsample=None, hint=None
     axis.set_xlim([np.min(x), np.max(x)])
 
 
-def plot_array_1d_set(array, axis, color=None, xlim=None, downsample=None, hint=None, labels=None):
+def plot_array_1d_set(array, axis, color=None, xlim=None, hint=None, labels=None, second_y=False):
     dim = array.dimensions[0]
 
     assert dim.dimension_type == nix.DimensionType.Set, "Unsupported data"
 
-    #x = array[xlim or Ellipsis]
     x = array[:]
-    z = np.ones_like(x) * 0.5 * axis.get_ylim()[1]
-    axis.scatter(x, z, 50, color, linewidths=2, label=array.name, marker="|")
-    axis.set_xlabel('%s [%s]' % (array.label, array.unit))
-    axis.set_ylabel(array.name)
-    #axis.set_yticks([])
+    z = np.ones_like(x) * 0.8 * (hint or 0.5) + 0.1
+    if second_y:
+        ax2 = axis.twinx()
+        ax2.set_ylim([0, 1])
+        ax2.scatter(x, z, 50, color, linewidths=2, label=array.name, marker="|")
+        ax2.set_yticks([])
 
-    if labels is not None:
-        for i, v in enumerate(labels[:]):
-            axis.annotate(str(v), (x[i], z[i]))
+        if labels is not None:
+            for i, v in enumerate(labels[:]):
+                ax2.annotate(str(v), (x[i], z[i]))
+
+    else:
+        #x = array[xlim or Ellipsis]
+        axis.set_ylim([0, 1])
+        axis.scatter(x, z, 50, color, linewidths=2, label=array.name, marker="|")
+        axis.set_xlabel('%s [%s]' % (array.label, array.unit))
+        axis.set_ylabel(array.name)
+        axis.set_yticks([])
+
+        if labels is not None:
+            for i, v in enumerate(labels[:]):
+                axis.annotate(str(v), (x[i], z[i]))
 
 
 def plot_array_2d(array, axis, color=None, xlim=None, downsample=None, hint=None, labels=None):

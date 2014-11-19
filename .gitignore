@@ -65,3 +65,5 @@ target/
 
 # Files created by demo notebooks 
 *.demo.h5
+data/relacs.h5
+data/tracking_data.h5
