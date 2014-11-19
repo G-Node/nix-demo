@@ -224,14 +224,14 @@ def plot_array_1d(array, axis, color=None, xlim=None, downsample=None, hint=None
         x = np.arange(0, array.shape[0]) * dim.sampling_interval + x_start
     else:
         x = np.array(dim.ticks)
-
+    
     if downsample is not None:
         x = sp.decimate(x, downsample)
         y = sp.decimate(y, downsample)
     if xlim is not None:
-        x = x[np.all((x >= xlim[0], x <= xlim[1]), axis=0)]
-        y = y[np.all((x >= xlim[0], x <= xlim[1]), axis=0)]
-
+        y = y[(x >= xlim[0]) & (x <= xlim[1])]
+        x = x[(x >= xlim[0]) & (x <= xlim[1])]
+       
     axis.plot(x, y, color, label=array.name)
     axis.set_xlabel('%s [%s]' % (dim.label, dim.unit))
     axis.set_ylabel('%s [%s]' % (array.label, array.unit))
