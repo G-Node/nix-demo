@@ -1,9 +1,18 @@
 """
+Example usage:
+python pvc-7-2nix.py -p "/home/andrey/data/CRCNS/pvc-7" -s 5000 -e 6000
+
+---------------------------------
+
 Installing OpenCV on Ubuntu 14.04
 http://www.samontab.com/web/2014/06/installing-opencv-2-4-9-in-ubuntu-14-04-lts/
 
-Example:
-python pvc-7-2nix.py -p "/home/andrey/data/CRCNS/pvc-7" -s 5000 -e 6000
+Working with video with OpenCV
+http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_gui/py_video_display/py_video_display.html#display-video
+http://docs.opencv.org/trunk/modules/highgui/doc/reading_and_writing_images_and_video.html
+
+Image processing with PIL
+http://matplotlib.org/users/image_tutorial.html
 """
 
 import h5py
@@ -52,6 +61,7 @@ def create_array(target_file, where, array_params, ticks):
     data = block.create_data_array(*array_params)
 
     data.append_range_dimension(ticks)
+    data.dimensions[0].label = 'frames'
     for i in range(len(data.data.shape) - 1):
         data.append_set_dimension()
 
@@ -221,6 +231,12 @@ if __name__ == '__main__':
     data, ticks = Parser.read_speed(source_file, start, end)
     params = ('runspeed', 'runspeed', data.dtype, data.shape, data)
     create_array(args.output, bname, params, ticks)
+
+    target = nix.File.open(args.output, nix.FileMode.ReadWrite)
+    rs = target.blocks[bname].data_arrays['runspeed']
+    rs.unit = 'cm/s'
+    rs.label = 'speed'
+    target.close()
 
     # convert stimulus
     source_file = os.path.join(l_path, 'stimulus.csv')

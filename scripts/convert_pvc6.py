@@ -85,7 +85,7 @@ def write_pvc6(sweeps, out_file):
             curr_times = sweep.times
 
             pos = block.create_data_array("Stimulus Positions %02d" % sweep.number, "nix.positions",
-                                          data=sweep.indexes)
+                                          data=sweep.times)
             pos.label = "time"
             pos.unit = SAMPLING_UNIT
             pos.append_set_dimension()
@@ -103,6 +103,7 @@ def write_pvc6(sweeps, out_file):
                                            data=sweep.stimulus)
             stim.unit = "pA"
             stim.label = "injected current"
+            stim.append_set_dimension()
 
             curr_tag.create_feature(stim, nix.LinkType.Indexed)
 
