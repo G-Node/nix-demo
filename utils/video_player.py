@@ -11,53 +11,26 @@ import matplotlib.animation as animation
 
 class Playback(object):
     
-    def __init__(self, fig, video_array):
-
-        self.data = video_array
+    def __init__(self, fig, video_array, tracking_tag=None, show_orientation=False):
         self.figure = fig
         self.axis = fig.add_subplot(111)
         self.im = None
+
+        self.data = video_array
         self.height, self.width, self.channels, self.nframes = self.data.shape
         dim = video_array.dimensions[-1]
         ticks = dim.ticks
         self.interval = np.mean(np.diff(ticks))
-
-       
-    def grab_frame(self, i):
-        if i < self.nframes:
-            data = self.data[:,:,:,i]
-            if self.im == None:
-                im = self.axis.imshow(data)
-            else:
-                im.set_data(data)
-            return im, 
-        return None
-
-    def start(self):
-        ani = animation.FuncAnimation(self.figure, self.grab_frame,
-                                      range(1,self.nframes,2), interval=self.interval, 
-                                      repeat=False, blit=True)
-        plt.show()
-
-
-class Playback_Tracker(object):
-    
-    def __init__(self, fig, video_array, tracking_tag, show_orientation=False):
-        self.data = video_array
-        self.positions = tracking_tag.positions
-        self.orientations = tracking_tag.features[0].data
-        self.figure = fig
-        self.axis = fig.add_subplot(111)
-        self.im = None
-        self.height, self.width, self.channels, self.nframes = self.data.shape
-        dim = video_array.dimensions[-1]
-        ticks = dim.ticks
-        self.interval = np.mean(np.diff(ticks))
-        self.tracked_indices = self.__track_indices(ticks, self.positions[:,3])
-        self.x = self.positions[:,0]
-        self.y = self.positions[:,1]
-        self.track_counter = 0
-        self.draw_orientation = show_orientation
+        
+        self.tag = tracking_tag
+        if self.tag is not None:
+            self.positions = self.tag.positions
+            self.orientations = self.tag.features[0].data
+            self.tracked_indices = self.__track_indices(ticks, self.positions[:,3])
+            self.x = self.positions[:,0]
+            self.y = self.positions[:,1]
+            self.track_counter = 0
+            self.draw_orientation = show_orientation
     
     def __track_indices(self, ticks, times):
         indices = np.zeros_like(times)
@@ -83,17 +56,16 @@ class Playback_Tracker(object):
         return frame
 
     def grab_frame(self, i):
-        print (i)
         frame = self.data[:,:,:,i]
-        
-        if i in self.tracked_indices:
-            frame = self.__draw_circ(frame, self.x[self.track_counter], 
-                                     self.y[self.track_counter]) 
-            if self.draw_orientation: 
-                frame = self.__draw_line(frame,self.x[self.track_counter], 
-                                     self.y[self.track_counter],
-                                     self.orientations[self.track_counter])
-            self.track_counter += 1
+        if self.tag is not None:
+            if i in self.tracked_indices:
+                frame = self.__draw_circ(frame, self.x[self.track_counter], 
+                                         self.y[self.track_counter]) 
+                if self.draw_orientation: 
+                    frame = self.__draw_line(frame,self.x[self.track_counter], 
+                                             self.y[self.track_counter],
+                                             self.orientations[self.track_counter])
+                self.track_counter += 1
         if self.im == None:
             im = self.axis.imshow(frame)
         else:
@@ -119,8 +91,6 @@ if __name__ == '__main__':
     tag = [t for t in b.multi_tags if t.name == "tracking"][0]
     
     fig = plt.figure(facecolor='white')
-    pb = Playback_Tracker(fig, video, tag, show_orientation=True)
+    pb = Playback(fig, video, tracking_tag=tag, show_orientation=True)
     pb.start()
-    #pb = Playback(fig,video)
-    #pb.start()
     nix_file.close()
