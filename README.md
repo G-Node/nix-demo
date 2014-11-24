@@ -1,7 +1,7 @@
-nwb-demo
+nix-demo
 ========
 
-Demo material for the NWB hackathon
+Demo material for NIX
 
 
 Project Structure
