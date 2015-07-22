@@ -73,7 +73,7 @@ if __name__ == '__main__':
 
     d1 = nix2.D('ms', 'Time', scale=ticks)
     d2 = nix2.D('px', 'Pixel', interval=1)
-    mtl1 = b.create_matrix_list('concat', 'imaging', (d1, d2, d2), size=(1,) + data.shape)
+    mtl1 = b.create_matrix_list('concat', 'imaging', (d1, d2, d2), dtype=data.dtype, size=(1,) + data.shape)
     mtl1.all_data[:] = [data]
 
     # convert eye movie
@@ -84,7 +84,7 @@ if __name__ == '__main__':
     d1 = nix2.D('ms', 'Time', scale=ticks)
     d2 = nix2.D('px', 'Pixel', interval=1)
     d3 = nix2.D('bit', 'RGB', interval=1)
-    mtl2 = b.create_matrix_list('eye.avi', 'movie', (d1, d2, d2, d3), size=(1,) + data.shape)
+    mtl2 = b.create_matrix_list('eye.avi', 'movie', (d1, d2, d2, d3), dtype=data.dtype, size=(1,) + data.shape)
     mtl2.all_data[:] = [data]
 
     # convert mouse movie
@@ -95,7 +95,7 @@ if __name__ == '__main__':
     d1 = nix2.D('ms', 'Time', scale=ticks)
     d2 = nix2.D('px', 'Pixel', interval=1)
     d3 = nix2.D('bit', 'RGB', interval=1)
-    mtl3 = b.create_matrix_list('mouse.avi', 'movie', (d1, d2, d2, d3), size=(1,) + data.shape)
+    mtl3 = b.create_matrix_list('mouse.avi', 'movie', (d1, d2, d2, d3), dtype=data.dtype, size=(1,) + data.shape)
     mtl3.all_data[:] = [data]
 
     # convert running speeds
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     data, ticks = Parser.read_speed(source_file, start, end)
 
     d1 = nix2.D('ms', 'Time', scale=ticks)
-    mtl4 = b.create_matrix_list('runspeed', 'runspeed', (d1,), size=(1,) + data.shape)
+    mtl4 = b.create_matrix_list('runspeed', 'runspeed', (d1,), dtype=data.dtype, size=(1,) + data.shape)
     mtl4.all_data[:] = [data]
     mtl4.unit = 'cm/s'
     mtl4.label = 'speed'
@@ -113,7 +113,7 @@ if __name__ == '__main__':
     collected = Parser.read_stimulus(source_file, start, end)
 
     # create a reference between stimulus and recorded data
-    rec = b.create_region_list("recording", "recording", (nix2.D('ms'),), size=len(collected))
+    rec = b.create_region_list("recording", "recording", (nix2.D('ms'),), dtype=collected.dtype, size=len(collected))
     # nix2 requires to wrap every single value into an array
     rec.all_data[:] = [[[x] for x in row] for row in collected[:,0:2]]
 
@@ -124,7 +124,8 @@ if __name__ == '__main__':
     d2 = nix2.D('mm', 'SF')
     d3 = nix2.D('mm', 'TF')
     d4 = nix2.D('percent', 'contrast')
-    combinations = b.create_point_list('stimulus', 'stimulus', (d1, d2, d3, d4), size=len(stimulus))
+    combinations = b.create_point_list('stimulus', 'stimulus', (d1, d2, d3, d4), dtype=collected.dtype, size=len(stimulus))
+    combinations.all_data[:] = stimulus
 
     # tag all data
     rec.add_feature_points(combinations)
