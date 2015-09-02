@@ -11,7 +11,8 @@ def print_metadata_table(section):
     import matplotlib.pyplot as plt
     columns = ['Name', 'Value', 'Unit']
     cell_text = []
-    for p in section.items():
+    for p in [(i.name, i) for i in section.props]:
+        
         for i, v in enumerate(p[1].values):
             value = str(v.value)
             if len(value) > 30:
