@@ -2,7 +2,7 @@
 #  -*- coding: utf-8 -*-
 from __future__ import print_function, division
 
-import nix
+import nixio as nix
 import math
 import cv2
 import numpy as np
