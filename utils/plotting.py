@@ -6,7 +6,7 @@ import numpy as np
 import scipy.signal as sp
 import random
 
-import nix
+import nixio as nix
 import matplotlib.pyplot as plt
 
 COLORS_BLUE_AND_RED = (
