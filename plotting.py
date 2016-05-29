@@ -2,7 +2,7 @@
 #  -*- coding: utf-8 -*-
 from __future__ import print_function, division
 
-import nix
+import nixio as nix
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
