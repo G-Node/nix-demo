@@ -4,7 +4,7 @@ from __future__ import print_function, division
 
 import matplotlib.mlab as mlab
 import numpy as np
-import nix
+import nixio as nix
 import argparse
 
 
